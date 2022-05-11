@@ -4,7 +4,6 @@ import numpy as np
 import os, pickle
 from tqdm import tqdm, trange
 import math
-# from tqdm import tqdm,trange, tqdm_notebook
 import numpy.linalg as npl
 import scipy.special,time, scipy.stats
 from collections import Counter
@@ -19,7 +18,6 @@ def floor(arr):
 #### Rousseuw and Ruts
 # helpful ref https://github.com/olgazasenko/ColourfulSimplicialDepthInThePlane/blob/master/src/colourfulsimplicialdepthintheplane/RousseeuwAndRuts.java
 def ruts2dDepth(data,point):
-#     start = time.time()
     (n,d) = data.shape
     pi =np.pi
     
@@ -31,7 +29,6 @@ def ruts2dDepth(data,point):
     alphaArr = np.sort(alphaArr)
     maxGap = max(2*np.pi+alphaArr[0] - alphaArr[-1],np.max(alphaArr[1:]-alphaArr[:-1]))
     if maxGap>np.pi:
-#         print(r'max gap > $\pi$')
         return choose(n,2)/choose(n+1,3)
     alphaArr-= alphaArr[0]
     
@@ -42,20 +39,16 @@ def ruts2dDepth(data,point):
 
     betaArr = np.sort(betaArr)
     
-    
     mergedArr,wArr = mergeArrays(alphaArr,betaArr)
-#     print(wArr)
     
     hi = np.zeros(n)
     hi[0]=nu-1
     startLoc = min(np.where(mergedArr>pi)[0])
 
     
-#     startLoc = max(np.where(mergedArr==np.max(alphaArr[alphaArr<pi])))
     NF = nu
     t = 1
     i = startLoc
-#     while t<n:
     while i!= startLoc-1:
         if wArr[i]==1:
             NF+=1
@@ -65,12 +58,9 @@ def ruts2dDepth(data,point):
         i+=1
         i %= 2*n
         
-#     print(time.time()-start)
-
     hiCheck = np.zeros(n)
     j=0
     for i in range(n):
-#         j=i
         while True:
             if (alphaArr[i] <= alphaArr[j] and alphaArr[j]< alphaArr[i] + pi) or (alphaArr[j] < alphaArr[i]-pi):
                 j+=1
@@ -83,20 +73,11 @@ def ruts2dDepth(data,point):
             hiCheck[i] = j-i+n
         else:
             hiCheck[i]=j-i
-#     print(hi)
-#     print(hiCheck)
-#     if not np.allclose(hi,hiCheck):
-#         print(hi)
-#         print(hiCheck)
-#     print(np.allclose(hi,hiCheck))
-#     print(hi)
 
-#     print(time.time()-start)
     output = choose(n,3)
     for i in range(n):
         output-= choose(hiCheck[i],2)
     
-#     print(time.time()-start)
     return (output+choose(n,2))/choose(n+1,3)
     
 
@@ -109,7 +90,6 @@ def mergeArrays(arr1, arr2):
     k = 0
     w = np.zeros(2*n)
     
-#     print('w',w)
     # Traverse both array
     while i < n and j < n:
         if arr1[i] < arr2[j]:
@@ -124,7 +104,6 @@ def mergeArrays(arr1, arr2):
             k = k + 1
             j = j + 1
             
-     
  
     # Store remaining elements
     # of first array
@@ -146,6 +125,7 @@ def mergeArrays(arr1, arr2):
     return arr3,w
 
 
+### adaptive simplicial median computation
 def bestArm(dataSet,eps,delta):
     n,d = dataSet.shape
     r=1
@@ -164,7 +144,6 @@ def bestArm(dataSet,eps,delta):
         
         nr = len(activeArmsSet)
         tr = int(min(tr,scipy.special.comb(n,d+1)))
-#         print("r={},tr={},nr={}".format(r,tr,nr))
         
         threshold = int(n*np.log2(n))
         if tr>threshold and d==2:
@@ -174,10 +153,6 @@ def bestArm(dataSet,eps,delta):
                 exactComputeVal[i] = ruts2dDepth(np.delete(dataSet,idx,axis=0),dataSet[idx])
                 estMeans[idx]=exactComputeVal[i]
                 numPulls[idx] += threshold
-#             print('short circuiting')
-#             print(exactComputeIdx)
-#             print(exactComputeVal)
-#             print(exactComputeIdx[exactComputeVal.argmax()])
             return exactComputeIdx[exactComputeVal.argmax()],estMeans,numPulls,len(activeArmsSet)
         
         
@@ -193,13 +168,12 @@ def bestArm(dataSet,eps,delta):
             refPts = dataSet[refIdxs]
             X = refPts[:d].T - np.outer(refPts[-1], np.ones(d))
             
+            ### batch solve linear systems
             queryPts = dataSet[activeArmsArr].T
             lamCoords = np.zeros((d+1,nr))
             lamCoords[:d] = npl.solve(X,queryPts-np.outer(refPts[-1],np.ones(nr)))
 
             lamCoords[-1] = 1-lamCoords.sum(axis=0)
-#             print(lamCoords.shape)
-#             inSimplex = np.maximum(1.0*np.all(lamCoords>-1*10**(-12),axis=0)-.5*np.any(lamCoords>1-10**(-12),axis=0),0)
             inSimplex = 1.0*np.all(lamCoords>-1*10**(-12),axis=0)
 
     
@@ -212,7 +186,8 @@ def bestArm(dataSet,eps,delta):
         maxVal = estMeans[activeArmsArr].max()
         newActive = set()
         activeArmsArr=np.zeros(n,dtype=bool)
-#         print(estMeans[28],maxVal-epsR)
+
+        ### determine active arms for next round
         for i in activeArmsSet:
             if estMeans[i]> maxVal-epsR:
                 newActive.add(i)
@@ -226,16 +201,14 @@ def bestArm(dataSet,eps,delta):
         
         
         
+### brute force simplicial median computation
 def bruteForce(dataSet,maxPulls = -1):
     (n,d) = dataSet.shape
     estMeans = np.zeros(n)
     
-    
     evalPts = np.logspace(0,np.log2(scipy.special.comb(n,d+1)),num=10,base=2,endpoint=True,dtype=int)
     if maxPulls != -1:
         evalPts = np.logspace(0,np.log2(maxPulls),num=10,base=2,endpoint=True,dtype=int)
-#     evalPts = evalPts.astype(int)
-#     print(evalPts)
     evalArgmax = np.zeros(len(evalPts))
     evalCtr = 0
     
@@ -244,7 +217,6 @@ def bruteForce(dataSet,maxPulls = -1):
     if maxPulls!= -1:
         endIter = maxPulls
     
-#     for i,tup in tqdm(enumerate(itertools.combinations(range(n),d+1)),total=endIter):
     for i,tup in enumerate(itertools.combinations(range(n),d+1)):
         refPts = dataSet[list(tup)]
         if maxPulls!= -1:
@@ -258,7 +230,7 @@ def bruteForce(dataSet,maxPulls = -1):
 
         lamCoords[-1] = 1-lamCoords.sum(axis=0)
         inSimplex = 1.0*np.all(lamCoords>-1*10**(-12),axis=0)
-#         inSimplex[list(tup)]=.5
+
         estMeans += inSimplex
         
         if i==maxPulls:
@@ -266,7 +238,6 @@ def bruteForce(dataSet,maxPulls = -1):
         if i==evalPts[evalCtr]:
             evalArgmax[evalCtr] = np.argmax(estMeans)
             evalCtr+=1
-        
         
     evalArgmax[-1] = np.argmax(estMeans)
         
@@ -277,6 +248,7 @@ def bruteForce(dataSet,maxPulls = -1):
 
 
 def runSimAda(args):
+    ### to ensure that python doesn't try to multithread each run
     os.environ["MKL_NUM_THREADS"] = "1" 
     os.environ["NUMEXPR_NUM_THREADS"] = "1" 
     os.environ["OMP_NUM_THREADS"] = "1" 
@@ -341,14 +313,17 @@ def runSimRuts(args):
     
 
 
+### actual body of code to be run
 
+### inputs for processing
 delta = .001
-epsilon=.000001
+epsilon=.000001 ## irrelevant for exact computation, just set as small value
 nArr = np.round(np.logspace(np.log2(200),np.log2(20000),num=20,base=2)).astype(int)
 numTrials = 20
 num_jobs = 50
 d=2
 
+### parallelize over num_jobs threads
 pool      = mp.Pool(processes=num_jobs)
 arg_tuple = itertools.product(list(range(numTrials)),nArr)
 for _ in tqdm(pool.imap_unordered(runSimAda, arg_tuple), total=numTrials*len(nArr)):
